@@ -2,16 +2,14 @@
 
 import math
 import xml.etree.ElementTree as ET
-from typing import Optional, Union
+from time import time
 
 import numpy as np
-from bsl.lsl import StreamInlet, resolve_streams
-from bsl.utils import Timer
-from mne.filter import filter_data
+from mne_lsl.lsl import StreamInlet, resolve_streams
 from scipy.signal import find_peaks
 
-from .utils._checks import _check_type, _check_value
-from .utils._logs import logger
+from .utils._checks import check_type, check_value
+from .utils.logs import logger
 
 
 class Detector:
@@ -40,27 +38,23 @@ class Detector:
         ecg_ch_name: str,
         duration_buffer: float = 4.0,
         peak_height_perc: float = 98.0,
-        peak_prominence: Optional[float] = 20.0,
-        peak_width: Optional[float] = None,
+        peak_prominence: float | None = 20.0,
+        peak_width: float | None = None,
     ):
-        # Check arguments and create StreamReceiver
+        # Check arguments and create receiver
         self._peak_height_perc = Detector._check_peak_height_perc(peak_height_perc)
         self._peak_width = Detector._check_peak_width(peak_width)
         self._peak_prominence = Detector._check_peak_prominence(peak_prominence)
-        _check_type(stream_name, (str,), item_name="stream_name")
-        _check_type(ecg_ch_name, (str,), item_name="ecg_ch_name")
-        _check_type(duration_buffer, ("numeric",), item_name="duration_buffer")
+        check_type(stream_name, (str,), item_name="stream_name")
+        check_type(ecg_ch_name, (str,), item_name="ecg_ch_name")
+        check_type(duration_buffer, ("numeric",), item_name="duration_buffer")
         if duration_buffer <= 0.2:
             raise ValueError(
                 "Argument 'duration_buffer' must be strictly larger than 0.2. "
                 f"Provided: '{duration_buffer}' seconds."
             )
-
-        sinfos = list()
-        while len(sinfos) == 0:
-            sinfos = resolve_streams(timeout=10, name=stream_name)
+        sinfos = resolve_streams(timeout=10, name=stream_name)
         assert len(sinfos) == 1
-
         self._inlet = StreamInlet(
             sinfos[0],
             max_buffered=10,
@@ -72,11 +66,7 @@ class Detector:
         ch_list = []
         for elt in root.iter("channel"):
             ch_list.append(elt.find("label").text)
-        _check_value(
-            ecg_ch_name,
-            ch_list,
-            item_name="ecg_ch_name",
-        )
+        check_value(ecg_ch_name, ch_list, item_name="ecg_ch_name")
 
         # Infos from stream
         self._sample_rate = int(self._inlet.sfreq)
@@ -111,8 +101,8 @@ class Detector:
         Avoids any discontinuities in the ECG buffer.
         """
         logger.info("Filling an entire buffer of %s seconds..", self._duration_buffer)
-        timer = Timer()
-        while timer.sec() <= self._duration_buffer:
+        start = time()
+        while time() <= start + self._duration_buffer:
             self.update_loop()
         logger.info("Buffer pre-filled, ready to start!")
 
@@ -187,30 +177,8 @@ class Detector:
         return peaks
 
     def filter_data(self):
-        """
-        Filter the ECG buffer with an acausal filter.
-
-        Timeit
-        ------
-        (mean ± std. dev. of 7 runs, 100 loops each)
-
-        Windows -- AMD 5600X - DDR4 3600 MHz
-            - Data: 512 Hz - 2048 samples
-              3.71 ms ± 17.7 µs per loop
-            - Data: 1024 Hz - 4096 samples
-              7.03 ms ± 101 µs per loop
-            - Data: 2048 Hz - 8192 samples
-              13.3 ms ± 44.2 µs per loop
-
-        Linux -- i5-4590 - DDR3 1600 MHz
-            - Data: 512 Hz - 2048 samples
-              5 ms ± 34 µs per loop
-            - Data: 1024 Hz - 4096 samples
-              9.43 ms ± 83.2 µs per loop
-            - Data: 2048 Hz - 8192 samples
-              18.3 ms ± 102 µs per loop
-        """
-        return filter_data(self._ecg_buffer, self._sample_rate, 1.0, 15.0, phase="zero")
+        """Filter the ECG buffer with an acausal filter."""
+        raise NotImplementedError
 
     def detrend_data(self):
         """
@@ -299,9 +267,9 @@ class Detector:
 
     # --------------------------------------------------------------------
     @staticmethod
-    def _check_peak_height_perc(peak_height_perc: Union[int, float]):
+    def _check_peak_height_perc(peak_height_perc: int | float):
         """Check argument 'peak_height_perc'."""
-        _check_type(peak_height_perc, ("numeric",), item_name="peak_height_perc")
+        check_type(peak_height_perc, ("numeric",), item_name="peak_height_perc")
         if peak_height_perc <= 0:
             raise ValueError(
                 "Argument 'peak_height_perc' must be a strictly positive "
@@ -315,9 +283,9 @@ class Detector:
         return float(peak_height_perc)
 
     @staticmethod
-    def _check_peak_width(peak_width: Optional[Union[int, float]]):
+    def _check_peak_width(peak_width: int | float | None):
         """Check argument 'peak_width'."""
-        _check_type(peak_width, ("numeric", None), item_name="peak_width")
+        check_type(peak_width, ("numeric", None), item_name="peak_width")
         if peak_width is None:
             return None
         if peak_width <= 0:
@@ -328,7 +296,7 @@ class Detector:
         return float(peak_width)
 
     @staticmethod
-    def _convert_peak_width_to_samples(peak_width: Optional[float], fs: float):
+    def _convert_peak_width_to_samples(peak_width: float | None, fs: float):
         """Convert a peak width from ms to samples."""
         if peak_width is None:
             return None
@@ -336,9 +304,9 @@ class Detector:
             return math.ceil(peak_width / 1000 * fs)
 
     @staticmethod
-    def _check_peak_prominence(peak_prominence: Optional[Union[int, float]]):
+    def _check_peak_prominence(peak_prominence: int | float | None):
         """Check argument 'peak_prominence'."""
-        _check_type(peak_prominence, ("numeric", None), item_name="peak_prominence")
+        check_type(peak_prominence, ("numeric", None), item_name="peak_prominence")
         if peak_prominence is None:
             return None
         if peak_prominence <= 0:

@@ -1,20 +1,19 @@
 import math
 import random
 from itertools import groupby
-from typing import Union
 
 import numpy as np
 from numpy.typing import NDArray
 
-from ._checks import _check_type, _check_value
-from ._logs import logger
+from ._checks import check_type, check_value, ensure_int
+from .logs import logger
 
 
 def generate_sequence(
     size: int,
     omissions: int,
-    edge_perc: Union[int, float],
-    tdef,
+    edge_perc: int | float,
+    tdef: dict[str, int],
     max_iter: int = 500,
     on_diverge: str = "warn",
 ) -> NDArray[int]:
@@ -32,7 +31,7 @@ def generate_sequence(
     edge_perc : float
         Percentage of the total number of elements that have to be sound at
         the beginning and at the end of the sequence.
-    tdef : TriggerDef
+    tdef : dict
         Trigger definition instance. Must contain the keys:
             - sound (aligned on sequence)
             - omission (aligned on sequence)
@@ -43,11 +42,11 @@ def generate_sequence(
         RuntimeError when the randomization does not converge within the
         maximum number of iteration allowed.
     """
-    _check_type(size, ("int",), "size")
-    _check_type(omissions, ("int",), "omissions")
-    _check_type(edge_perc, ("numeric",), "edge_perc")
-    _check_type(max_iter, ("int",), "max_iter")
-    _check_value(on_diverge, ("warn", "raise"), "on_diverge")
+    size = ensure_int(size, "size")
+    omissions = ensure_int(omissions, "omissions")
+    check_type(edge_perc, ("numeric",), "edge_perc")
+    max_iter = ensure_int(max_iter, "max_iter")
+    check_value(on_diverge, ("warn", "raise"), "on_diverge")
     if size <= 0:
         raise ValueError(
             "Argument 'size' must be a strictly positive integer. "
@@ -70,16 +69,16 @@ def generate_sequence(
         )
 
     n_edge = math.ceil(edge_perc * size / 100)
-    start = [tdef.sound] * n_edge
+    start = [tdef["sound"]] * n_edge
 
-    middle = [tdef.sound] * (size - omissions - 2 * n_edge)
-    middle += [tdef.omission] * omissions
+    middle = [tdef["sound"]] * (size - omissions - 2 * n_edge)
+    middle += [tdef["omission"]] * omissions
     random.shuffle(middle)
     iter_ = 0
     while True:
         groups = [(n, list(group)) for n, group in groupby(middle)]
 
-        if all(len(group[1]) == 1 for group in groups if group[0] == tdef.omission):
+        if all(len(group[1]) == 1 for group in groups if group[0] == tdef["omission"]):
             converged = True
             break
 
@@ -93,11 +92,11 @@ def generate_sequence(
             break
 
         for i, (n, group) in enumerate(groups):
-            if n == tdef.sound or len(group) == 1:
+            if n == tdef["sound"] or len(group) == 1:
                 continue
 
             # find the longest group of TRIGGERS['sound']
-            idx = np.argmax([len(g) if n == tdef.sound else 0 for n, g in groups])
+            idx = np.argmax([len(g) if n == tdef["sound"] else 0 for n, g in groups])
             pos_sound = sum(len(g) for k, (_, g) in enumerate(groups) if k < idx)
             pos_sound = pos_sound + len(groups[idx][1]) // 2  # center
 
@@ -116,10 +115,11 @@ def generate_sequence(
 
     # sanity-check
     if converged:
-        assert all(len(group) == 1 for n, group in groups if n == tdef.omission)
+        assert all(len(group) == 1 for n, group in groups if n == tdef["omission"])
         assert not any(
-            middle[i - 1] == middle[i] == tdef.omission for i in range(1, len(middle))
+            middle[i - 1] == middle[i] == tdef["omission"]
+            for i in range(1, len(middle))
         )
 
-    end = [tdef.sound] * n_edge
+    end = [tdef["sound"]] * n_edge
     return np.array(start + middle + end)

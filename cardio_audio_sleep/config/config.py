@@ -1,79 +1,10 @@
 from configparser import ConfigParser
 from pathlib import Path
-from typing import Tuple
 
-from bsl.triggers import TriggerDef
-
-from ..utils._checks import _check_type, _check_value
+from ..utils._checks import check_type, check_value
 
 
-def load_triggers() -> TriggerDef:
-    """Load triggers from triggers.ini into a TriggerDef instance.
-
-    Returns
-    -------
-    tdef : TriggerDef
-        Trigger definitiopn containing: sound, omission, sync_start, sync_stop,
-        iso_start, iso_stop, async_start, async_stop, baseline_start and
-        baseline_stop, pause, resume and the instruments.
-    """
-    directory = Path(__file__).parent
-    tdef = TriggerDef(directory / "triggers.ini")
-
-    keys = (
-        "sound",
-        "omission",
-        "sync_start",
-        "sync_stop",
-        "iso_start",
-        "iso_stop",
-        "async_start",
-        "async_stop",
-        "baseline_start",
-        "baseline_stop",
-        "pause",
-        "resume",
-    )
-    for key in keys:
-        if not hasattr(tdef, key):
-            raise ValueError(f"Key '{key}' is missing from trigger definition.")
-
-    directory = Path(__file__).parent.parent / "audio"
-    assert directory.exists() and directory.is_dir()  # sanity-check
-    instrument_categories = tuple(
-        [elt.name for elt in directory.iterdir() if elt.is_dir()]
-    )
-    for instrument in instrument_categories:
-        if not hasattr(tdef, instrument):
-            raise ValueError(f"Key '{instrument}' is missing from trigger definition.")
-
-    return tdef
-
-
-def load_triggerbox_triggers() -> TriggerDef:
-    """Load triggers from trigger-box.ini into a TriggerDef instance.
-
-    Returns
-    -------
-    tdef : TriggerDef
-        Trigger definition containing the 4 buttons of the trigger box.
-    """
-    directory = Path(__file__).parent
-    tdef = TriggerDef(directory / "triggerbox-triggers.ini")
-
-    directory = Path(__file__).parent.parent / "audio"
-    assert directory.exists() and directory.is_dir()  # sanity-check
-    instrument_categories = tuple(
-        [elt.name for elt in directory.iterdir() if elt.is_dir()]
-    )
-    for instrument in instrument_categories:
-        if not hasattr(tdef, instrument):
-            raise ValueError(f"Key '{instrument}' is missing from trigger definition.")
-
-    return tdef
-
-
-def load_config(fname: str, dev: bool = False) -> Tuple[dict, str]:
+def load_config(fname: str, dev: bool = False) -> tuple[dict, str]:
     """Load config from config.ini.
 
     Parameters
@@ -89,8 +20,8 @@ def load_config(fname: str, dev: bool = False) -> Tuple[dict, str]:
     trigger : str
         Type of trigger.
     """
-    _check_type(fname, (str,), "fname")
-    _check_type(dev, (bool,), "dev")
+    check_type(fname, (str,), "fname")
+    check_type(dev, (bool,), "dev")
 
     directory = Path(__file__).parent
     config = ConfigParser(inline_comment_prefixes=("#", ";"))
@@ -114,7 +45,7 @@ def load_config(fname: str, dev: bool = False) -> Tuple[dict, str]:
 
     # retrieve trigger type
     trigger = config["trigger"]["type"]
-    _check_value(trigger, ("lpt", "mock", "arduino"), "trigger")
+    check_value(trigger, ("lpt", "mock", "arduino"), "trigger")
 
     # convert all to int
     block = {key: int(value) for key, value in dict(config["block"]).items()}

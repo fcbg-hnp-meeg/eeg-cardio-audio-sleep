@@ -1,19 +1,21 @@
+from __future__ import annotations  # c.f. PEP 563, PEP 649
+
 import multiprocessing as mp
 import os
 import sys
 from datetime import datetime
 from itertools import chain
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 import psutil
-from bsl.triggers import MockTrigger, ParallelPortTrigger
+from byte_triggers import MockTrigger, ParallelPortTrigger
 from psychopy.visual import ShapeStim, Window
-from PyQt5.QtCore import QRect, QSize, Qt, QTimer, pyqtSlot
-from PyQt5.QtGui import QColor, QFont, QPalette
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import QRect, QSize, Qt, QTimer, pyqtSlot
+from PyQt6.QtGui import QColor, QFont, QPalette
+from PyQt6.QtWidgets import (
     QComboBox,
     QDial,
     QDoubleSpinBox,
@@ -26,9 +28,8 @@ from PyQt5.QtWidgets import (
 )
 
 from .. import logger
-from .._typing import EYELink
-from ..config import load_config, load_triggers
-from ..config.constants import SCREEN_KWARGS
+from ..config import load_config
+from ..config.constants import SCREEN_KWARGS, TRIGGERS
 from ..example import example
 from ..eye_link import EyelinkMock
 from ..recollection import recollection
@@ -43,9 +44,12 @@ from ..utils import (
     search_amplifier,
     test_volume,
 )
-from ..utils._checks import _check_value
+from ..utils._checks import check_value
 from ..utils._docs import fill_doc
 from ..utils._imports import import_optional_dependency
+
+if TYPE_CHECKING:
+    from ..eye_link import BaseEyelink
 
 
 @fill_doc
@@ -64,7 +68,7 @@ class GUI(QMainWindow):
     def __init__(
         self,
         ecg_ch_name: str,
-        eye_link: EYELink,
+        eye_link: BaseEyelink,
         instrument: bool = True,
         dev: bool = False,
     ):
@@ -120,14 +124,14 @@ class GUI(QMainWindow):
         self,
         ecg_ch_name: str,
         defaults: dict,
-        eye_link: EYELink,
+        eye_link: BaseEyelink,
         instrument: bool,
         dev: bool,
     ):
         """Set the variables and tasks arguments."""
         fname = "config-sleep-instrument.ini" if instrument else "config-sleep.ini"
         self.config, trigger_type = load_config(fname, dev)
-        self.tdef = load_triggers()
+        self.tdef = TRIGGERS
 
         # combine trigger with eye-link
         if trigger_type == "lpt":
@@ -145,7 +149,7 @@ class GUI(QMainWindow):
         self.trigger_instrument = TriggerInstrument()
 
         # search for LSL stream
-        self._stream_name = search_amplifier("micromed")
+        self._stream_name = search_amplifier()
         self._ecg_ch_name = ecg_ch_name
 
         # Create task mapping
@@ -204,8 +208,8 @@ class GUI(QMainWindow):
     def load_ui(
         self,
         defaults: dict,
-        eye_link: EYELink,
-        instrument_categories: Tuple[str],
+        eye_link: BaseEyelink,
+        instrument_categories: list[str] | tuple[str, ...],
     ):
         """Load the graphical user interface."""
         # main window
@@ -427,7 +431,7 @@ class GUI(QMainWindow):
         alignment: str,
     ) -> QLabel:
         """Add a fix label."""
-        _check_value(alignment, ("left", "center", "right"), "alignment")
+        check_value(alignment, ("left", "center", "right"), "alignment")
         label = QLabel(window.central_widget)
         label.setGeometry(QRect(x, y, w, h))
         label.setSizePolicy(GUI._sizePolicy(label))
@@ -498,10 +502,10 @@ class GUI(QMainWindow):
         w: float,
         h: float,
         name: str,
-        min_: Optional[float] = None,
-        max_: Optional[float] = None,
-        step: Optional[float] = None,
-        value: Optional[float] = None,
+        min_: float | None = None,
+        max_: float | None = None,
+        step: float | None = None,
+        value: float | None = None,
     ) -> QDoubleSpinBox:
         """Add a double SpinBox."""
         doubleSpinBox = QDoubleSpinBox(window.central_widget)
@@ -1231,7 +1235,7 @@ class GUI(QMainWindow):
     @pyqtSlot()
     def pushButton_amplifier_clicked(self):
         try:
-            stream_name = search_amplifier("micromed")
+            stream_name = search_amplifier()
             logger.info("Amplifier found: %s", stream_name)
             self.label_amplifier.setText(f"Detected amplifier: '{stream_name}'")
             self._stream_name = stream_name

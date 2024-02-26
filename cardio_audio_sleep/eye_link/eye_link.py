@@ -5,19 +5,17 @@ import pylink
 from psychopy import event, logging, visual
 
 from .. import logger
-from .._typing import EYELink
 from ..config.constants import SCREEN_KWARGS
-from ..utils._checks import _check_type
-from .EyeLinkCoreGraphicsPsychoPy import EyeLinkCoreGraphicsPsychoPy
+from ..utils._checks import check_type
+from ._base import BaseEyelink
+from ._graphics import EyeLinkCoreGraphicsPsychoPy
 
 # set psychopy log level
 logging.console.setLevel(logging.CRITICAL)
 
 
-class Eyelink(EYELink):
-    """
-    Eyelink class which communicates with the Eye-Tracker device from
-    SR Research.
+class Eyelink(BaseEyelink):
+    """Eyelink class which communicates with the Eye-Tracker device from SR Research.
 
     Parameters
     ----------
@@ -33,11 +31,11 @@ class Eyelink(EYELink):
     """
 
     def __init__(self, pname="./", fname: str = "TEST", host_ip="100.1.1.1"):
-        pname = Path(_check_type(pname, ("path-like",), "pname"))
+        pname = Path(check_type(pname, ("path-like",), "pname"))
         if not pname.exists():
             os.makedirs(pname)
         self.edf_pname = pname
-        fname = _check_type(fname, (str,), "fname")
+        fname = check_type(fname, (str,), "fname")
         if fname.endswith(".EDF"):
             fname = fname.split(".EDF")[0]
         if 8 < len(fname):
@@ -135,12 +133,12 @@ class Eyelink(EYELink):
         pylink.openGraphicsEx(self.genv)
 
     def clear_screen(self):
-        """clear up the PsychoPy window"""
+        """Clear the PsychoPy window."""
         self.win.fillColor = self.genv.getBackgroundColor()
         self.win.flip()
 
     def show_msg(self, text, wait_for_keypress=True):
-        """Show task instructions on screen"""
+        """Show task instructions on screen."""
         msg = visual.TextStim(
             self.win,
             text,
@@ -156,7 +154,7 @@ class Eyelink(EYELink):
             event.waitKeys()
             self.clear_screen()
 
-    def calibrate(self):
+    def calibrate(self):  # noqa: D102
         # Show the task instructions
         task_msg = "\nPress ENTER twice to display tracker menu"
         self.show_msg(task_msg)
@@ -168,11 +166,11 @@ class Eyelink(EYELink):
             self.close()
             raise
 
-    def start(self):
+    def start(self):  # noqa: D102
         self.el_tracker.startRecording(1, 1, 1, 1)
         self.el_tracker.sendMessage("START")
 
-    def stop(self):
+    def stop(self):  # noqa: D102
         self.el_tracker.stopRecording()
         self.el_tracker.setOfflineMode()
 

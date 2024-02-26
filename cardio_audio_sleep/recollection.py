@@ -1,14 +1,14 @@
+from __future__ import annotations  # c.f. PEP 563, PEP 649
+
 from itertools import chain
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING
 
 import numpy as np
-from bsl.triggers import LSLTrigger
 from numpy.random import default_rng
-from numpy.typing import NDArray
 from psychopy.clock import Clock
 from psychopy.hardware.keyboard import Keyboard
-from psychopy.visual import ButtonStim, ImageStim, ShapeStim, Slider, TextStim, Window
+from psychopy.visual import ButtonStim, ImageStim, ShapeStim, Slider, TextStim
 
 from . import logger
 from .config import load_config
@@ -20,11 +20,19 @@ from .utils import (
     load_instrument_images,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from numpy.typing import NDArray
+    from psychopy.visual import Window
+
+    from .triggers import TriggerInstrument
+
 
 def recollection(
     win: Window,
     args_mapping: dict,
-    trigger_instrument: LSLTrigger,
+    trigger_instrument: TriggerInstrument,
     instrument_files_example: dict,
     instrument_files_sleep: dict,
     instrument_files_recollection: dict,
@@ -147,9 +155,15 @@ def recollection(
                 sequence_timings = result  # replace previous sequence timings
     except Exception:
         raise
-    finally:  # close
-        win.flip()  # flip one last time before closing to flush events
-        win.close()
+    finally:
+        try:
+            win.flip()  # flip one last time before closing to flush events
+        except Exception:
+            pass
+        try:
+            win.close()
+        except Exception:
+            pass
     return responses
 
 
@@ -157,7 +171,7 @@ def _list_recollection_tests(
     instrument_files_sleep: dict,
     instrument_files_recollection: dict,
     dev: bool,
-) -> List[Tuple[str, Path]]:
+) -> list[tuple[str, Path]]:
     """List the condition/sound tests to run."""
     conditions = ("synchronous", "isochronous", "asynchronous")
     assert all(elt in instrument_files_sleep for elt in conditions)
@@ -185,10 +199,10 @@ def _list_recollection_tests(
 
 
 def _prepare_distribution_stimuli(
-    recollection_tests: List[Tuple[str, Path]],
+    recollection_tests: list[tuple[str, Path]],
     config: dict,
     delta: float = 2,
-) -> Dict[str, List[int]]:
+) -> dict[str, list[int]]:
     """Prepare the randomize distribution of stimuli for each condition."""
     # count the number of tests in each condition
     number_tests = dict()
@@ -225,7 +239,7 @@ def _prepare_distribution_stimuli(
     return distribution
 
 
-def _load_config(args_mapping: dict, dev: bool) -> Tuple[dict, dict]:
+def _load_config(args_mapping: dict, dev: bool) -> tuple[dict, dict]:
     """Load config and prepare arguments."""
     # load config
     config, _ = load_config("config-recollection.ini", dev)
@@ -240,7 +254,7 @@ def _load_config(args_mapping: dict, dev: bool) -> Tuple[dict, dict]:
 
 def _prepare_components(
     win: Window,
-) -> Tuple[Union[ImageStim, ShapeStim], ...]:
+) -> tuple[ImageStim | ShapeStim, ...]:
     """Prepare most used components."""
     instrument_images = load_instrument_images()
     instruments = load_instrument_categories()
@@ -249,7 +263,7 @@ def _prepare_components(
     positions = np.linspace(-0.5, 0.5, len(instruments))
     # create images
     images = list()
-    for instrument, position in zip(instruments, positions):
+    for instrument, position in zip(instruments, positions, strict=True):
         images.append(
             ImageStim(win, instrument_images[instrument], pos=(position, -0.5))
         )
@@ -276,7 +290,9 @@ def _instructions(win: Window, keyboard: Keyboard):
     # create images/texts
     images = list()
     texts = list()
-    for k, (instrument, position) in enumerate(zip(instruments, positions)):
+    for k, (instrument, position) in enumerate(
+        zip(instruments, positions, strict=True)
+    ):
         images.append(
             ImageStim(win, instrument_images[instrument], pos=(position, -0.2))
         )
@@ -306,7 +322,7 @@ def _instructions(win: Window, keyboard: Keyboard):
         pos=(0, -0.65),
     )
     # display
-    for img, txt in zip(images, texts):
+    for img, txt in zip(images, texts, strict=True):
         img.setAutoDraw(True)
         txt.setAutoDraw(True)
     instruction_text.setAutoDraw(True)
@@ -323,7 +339,7 @@ def _instructions(win: Window, keyboard: Keyboard):
     keyboard.clearEvents()
 
     # remove
-    for img, txt in zip(images, texts):
+    for img, txt in zip(images, texts, strict=True):
         img.setAutoDraw(False)
         txt.setAutoDraw(False)
     instruction_text.setAutoDraw(False)
@@ -421,8 +437,8 @@ def _task_routine(
     win: Window,
     task: Callable,
     args: tuple,
-    images: Tuple[Union[ImageStim, ShapeStim], ...],
-) -> Optional[NDArray[float]]:
+    images: tuple[ImageStim | ShapeStim, ...],
+) -> NDArray[np.float64] | None:
     """Fixation cross routine."""
     for img in images:
         img.setAutoDraw(True)
@@ -431,7 +447,7 @@ def _task_routine(
     return result
 
 
-def _category(images: Tuple[Union[ImageStim, ShapeStim], ...]) -> None:
+def _category(images: tuple[ImageStim | ShapeStim, ...]) -> None:
     """Category routine."""
     timer = Clock()
     while True:

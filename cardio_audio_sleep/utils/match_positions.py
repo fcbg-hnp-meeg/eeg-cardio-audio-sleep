@@ -1,7 +1,13 @@
-import numpy as np
-from numpy.typing import ArrayLike
+from __future__ import annotations  # c.f. PEP 563, PEP 649
 
-from ._checks import _check_type
+from typing import TYPE_CHECKING
+
+import numpy as np
+
+from ._checks import check_type, ensure_int
+
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike
 
 
 def match_positions(x: ArrayLike, y: ArrayLike, threshold: int):
@@ -26,9 +32,9 @@ def match_positions(x: ArrayLike, y: ArrayLike, threshold: int):
     idy : array
         Indices from positions in Y close to a position in X.
     """
-    _check_type(x, (list, tuple, np.ndarray), "x")
-    _check_type(y, (list, tuple, np.ndarray), "y")
-    _check_type(threshold, ("int",), "threshold")
+    check_type(x, (list, tuple, np.ndarray), "x")
+    check_type(y, (list, tuple, np.ndarray), "y")
+    threshold = ensure_int(threshold, "threshold")
     x = np.array(x)
     y = np.array(y)
     if threshold <= 0:
@@ -36,10 +42,8 @@ def match_positions(x: ArrayLike, y: ArrayLike, threshold: int):
             "Argument 'threshold' must be a strictly positive integer. "
             f"Provided: '{threshold}'."
         )
-
     d = np.repeat(x, y.shape[0]).reshape(x.shape[0], y.shape[0])
     d -= y
     idx, idy = np.where((-threshold < d) & (d < threshold))
     assert idx.shape == idy.shape  # sanity-check
-
     return idx, idy

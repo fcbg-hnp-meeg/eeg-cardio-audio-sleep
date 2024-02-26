@@ -3,24 +3,23 @@
 import math
 import time
 from itertools import cycle
-from typing import Optional, Tuple
 
 import numpy as np
-from bsl import StreamReceiver
 from matplotlib import pyplot as plt
 from matplotlib.widgets import Button, Slider
+from mne_lsl.stream import StreamLSL as Stream
 from scipy.signal import find_peaks
 
 from .utils import search_amplifier
-from .utils._checks import _check_type, _check_value
-from .utils._logs import logger
+from .utils._checks import check_type
+from .utils.logs import logger
 
 
 def peak_detection_parameters_tuning(
     ecg_ch_name: str,
-    stream_name: Optional[str] = None,
+    stream_name: str | None = None,
     duration_buffer: float = 4.0,
-) -> Tuple[float, Optional[float], Optional[float]]:
+) -> tuple[float, float | None, float | None]:
     """
     GUI to tune the height and width parameter of the R-peak detector.
 
@@ -103,7 +102,7 @@ def peak_detection_parameters_tuning(
         global width_disabled
 
         # remove outdated height lines
-        for k in range(len(height_lines) - 1, -1, -1):
+        for _ in range(len(height_lines) - 1, -1, -1):
             height_lines[-1].remove()
             del height_lines[-1]
         # remove outdated peak lines
@@ -251,21 +250,17 @@ def peak_detection_parameters_tuning(
 
 def _acquire_data(ecg_ch_name, stream_name, duration_buffer):
     """Acquire data for plot from LSL stream."""
-    _check_type(ecg_ch_name, (str,), item_name="ecg_ch_name")
-    _check_type(stream_name, (str, None), item_name="stream_name")
-    _check_type(duration_buffer, ("numeric",), item_name="duration_buffer")
+    check_type(ecg_ch_name, (str,), item_name="ecg_ch_name")
+    check_type(stream_name, (str, None), item_name="stream_name")
+    check_type(duration_buffer, ("numeric",), item_name="duration_buffer")
     if stream_name is None:
-        stream_name = search_amplifier("micromed")
+        stream_name = search_amplifier()
     if duration_buffer <= 0.2:
         raise ValueError(
             "Argument 'duration_buffer' must be strictly larger than 0.2. "
             f"Provided: '{duration_buffer}' seconds."
         )
-    sr = StreamReceiver(bufsize=duration_buffer, stream_name=stream_name)
-    if len(sr.streams) == 0:
-        raise ValueError("The StreamReceiver did not connect to any streams.")
-    _check_value(ecg_ch_name, sr.streams[stream_name].ch_list, item_name="ecg_ch_name")
-    ecg_ch_idx = sr.streams[stream_name].ch_list.index(ecg_ch_name)
+    stream = Stream(duration_buffer, name=stream_name).connect().pick(ecg_ch_name)
 
     # Acquisition
     logger.info("Starting data acquisition for tuning..")
@@ -274,16 +269,11 @@ def _acquire_data(ecg_ch_name, stream_name, duration_buffer):
     for k in range(4):
         logger.info("%i/4: Waiting %ss to fill the buffer..", k + 1, duration_buffer)
         time.sleep(duration_buffer + 0.2)
-        sr.acquire()
-        data_, _ = sr.get_buffer()
-        data.append(data_[:, ecg_ch_idx])
+        data_, _ = stream.get_data()
+        data.append(data_[0, :])
         time.sleep(2.5)
         logger.info("%i/4 complete!", k + 1)
-
-    # Retrieve sampling rate
-    fs = sr.streams[stream_name].sample_rate
-
-    return data, fs
+    return data, stream.info["sfreq"]
 
 
 def _detrend(data, duration_buffer):
@@ -293,7 +283,6 @@ def _detrend(data, duration_buffer):
         z = np.polyfit(times, data_, 1)
         linear_fit = z[0] * times + z[1]
         data[k] = data_ - linear_fit
-
     return data
 
 
@@ -311,7 +300,6 @@ def _draw_peaks(axs, data, height, prominence, width, fs):
             peak_lines[-1].append(
                 ax.axvline(peak, linestyle="--", color="navy", linewidth=0.75)
             )
-
     return peak_lines
 
 
@@ -321,5 +309,4 @@ def _draw_height(axs, data, height):
     for k, ax in enumerate(axs):
         height_ = np.percentile(data[k], height)
         height_lines.append(ax.axhline(height_, linestyle="--", color="tan"))
-
     return height_lines

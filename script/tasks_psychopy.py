@@ -1,7 +1,6 @@
 """Tasks functions."""
 
 from multiprocessing import Queue
-from typing import Optional, Union
 
 import numpy as np
 import psychtoolbox as ptb
@@ -12,23 +11,23 @@ from psychopy.sound.backend_ptb import SoundPTB as Sound
 from cardio_audio_sleep import logger
 from cardio_audio_sleep.detector import Detector
 from cardio_audio_sleep.utils._checks import (
-    _check_sequence,
-    _check_sequence_timings,
-    _check_tdef,
-    _check_type,
+    check_tdef,
+    check_type,
+    ensure_valid_sequence,
+    ensure_valid_sequence_timings,
 )
 
 
 def synchronous(
     trigger,
-    tdef,
+    tdef: dict[str, int],
     sequence: ArrayLike,
     stream_name: str,
     ecg_ch_name: str,
-    peak_height_perc: Union[int, float],
-    peak_prominence: Optional[Union[int, float]],
-    peak_width: Optional[Union[int, float]],
-    queue: Optional[Queue] = None,
+    peak_height_perc: int | float,
+    peak_prominence: int | float | None,
+    peak_width: int | float | None,
+    queue: Queue | None = None,
 ) -> list:  # noqa: D401
     """Synchronous block where sounds are sync to the heartbeat.
 
@@ -36,7 +35,7 @@ def synchronous(
     ----------
     trigger : Trigger
         A BSL trigger instance.
-    tdef : TriggerDef
+    tdef : dict
         Trigger definition instance. Must contain the keys:
             - sync_start
             - sound (aligned on sequence)
@@ -76,8 +75,8 @@ def synchronous(
         hamming=True,
     )
 
-    _check_tdef(tdef)
-    sequence = _check_sequence(sequence, tdef)
+    check_tdef(tdef)
+    sequence = ensure_valid_sequence(sequence, tdef)
 
     # Create peak detector
     detector = Detector(
@@ -97,7 +96,7 @@ def synchronous(
     sequence_timings = list()
 
     # Task loop
-    trigger.signal(tdef.sync_start)
+    trigger.signal(tdef["sync_start"])
     wait(0.2, hogCPUperiod=0)
 
     while counter <= len(sequence) - 1:
@@ -122,7 +121,7 @@ def synchronous(
             wait(0.1, hogCPUperiod=0)
 
     wait(1, hogCPUperiod=0)
-    trigger.signal(tdef.sync_stop)
+    trigger.signal(tdef["sync_stop"])
 
     if queue is not None:
         queue.put(sequence_timings)
@@ -132,14 +131,14 @@ def synchronous(
     return sequence_timings
 
 
-def isochronous(trigger, tdef, sequence: ArrayLike, delay: Union[int, float]):
+def isochronous(trigger, tdef: dict[str, int], sequence: ArrayLike, delay: int | float):
     """Isochronous block where sounds are delivered at a fix interval.
 
     Parameters
     ----------
     trigger : Trigger
         A BSL trigger instance.
-    tdef : TriggerDef
+    tdef : dict
         Trigger definition instance. Must contain the keys:
             - iso_start
             - sound (aligned on sequence)
@@ -163,9 +162,9 @@ def isochronous(trigger, tdef, sequence: ArrayLike, delay: Union[int, float]):
     )
     scheduling_delay = 0.2
 
-    _check_tdef(tdef)
-    sequence = _check_sequence(sequence, tdef)
-    _check_type(delay, ("numeric",), "delay")
+    check_tdef(tdef)
+    sequence = ensure_valid_sequence(sequence, tdef)
+    check_type(delay, ("numeric",), "delay")
     if delay <= 0:
         raise ValueError(
             "Argument 'delay' should be a strictly positive number. "
@@ -178,7 +177,7 @@ def isochronous(trigger, tdef, sequence: ArrayLike, delay: Union[int, float]):
     counter = 0
 
     # Task loop
-    trigger.signal(tdef.iso_start)
+    trigger.signal(tdef["iso_start"])
     wait(0.2, hogCPUperiod=0)
 
     while counter <= len(sequence) - 1:
@@ -194,11 +193,11 @@ def isochronous(trigger, tdef, sequence: ArrayLike, delay: Union[int, float]):
         counter += 1
 
     wait(1, hogCPUperiod=0)
-    trigger.signal(tdef.iso_stop)
+    trigger.signal(tdef["iso_stop"])
 
 
 def asynchronous(
-    trigger, tdef, sequence: ArrayLike, sequence_timings: ArrayLike
+    trigger, tdef: dict[str, int], sequence: ArrayLike, sequence_timings: ArrayLike
 ):
     """Asynchronous block where a synchronous sequence is repeated.
 
@@ -209,7 +208,7 @@ def asynchronous(
     ----------
     trigger : Trigger
         A BSL trigger instance.
-    tdef : TriggerDef
+    tdef : dict
         Trigger definition instance. Must contain the keys:
             - async_start
             - sound (aligned on sequence)
@@ -234,9 +233,9 @@ def asynchronous(
     )
     scheduling_delay = 0.2
 
-    _check_tdef(tdef)
-    sequence = _check_sequence(sequence, tdef)
-    sequence_timings = _check_sequence_timings(
+    check_tdef(tdef)
+    sequence = ensure_valid_sequence(sequence, tdef)
+    sequence_timings = ensure_valid_sequence_timings(
         sequence_timings, sequence, scheduling_delay
     )
 
@@ -249,7 +248,7 @@ def asynchronous(
     counter = 0
 
     # Task loop
-    trigger.signal(tdef.async_start)
+    trigger.signal(tdef["async_start"])
     wait(0.2, hogCPUperiod=0)
 
     while counter <= len(sequence) - 1:
@@ -269,4 +268,4 @@ def asynchronous(
             break  # no more delays since it was the last stimuli
 
     wait(1, hogCPUperiod=0)
-    trigger.signal(tdef.async_stop)
+    trigger.signal(tdef["async_stop"])

@@ -1,7 +1,6 @@
-from typing import List, Tuple
-
-import mne
 import numpy as np
+from mne import Annotations, create_info, rename_channels
+from mne.io import RawArray
 from mne.io.pick import _DATA_CH_TYPES_ORDER_DEFAULT
 from pyxdf import load_xdf
 
@@ -30,19 +29,15 @@ def read_raw_xdf(fname):
     except IndexError:
         instrument_stream = None
     del streams
-
     # retrieve information
     ch_names, ch_types, units = _get_eeg_ch_info(eeg_stream)
     sfreq = int(eeg_stream["info"]["nominal_srate"][0])
     data = eeg_stream["time_series"].T
-
     # create MNE raw
-    info = mne.create_info(ch_names, sfreq, ch_types)
-    raw = mne.io.RawArray(data, info, first_samp=0)
-
+    info = create_info(ch_names, sfreq, ch_types)
+    raw = RawArray(data, info, first_samp=0)
     # AUX channels
     raw = map_aux(raw)
-
     # rename channels to standard 10/20 convention
     mapping = {
         "FP1": "Fp1",
@@ -58,22 +53,16 @@ def read_raw_xdf(fname):
     }
     for key, value in mapping.items():
         try:
-            mne.rename_channels(raw.info, {key: value})
+            rename_channels(raw.info, {key: value})
         except Exception:
             pass
 
     # scaling
-    def uVolt2Volt(timearr):
-        """Convert from uV to Volts."""
-        return timearr * 1e-6
-
     raw.apply_function(
-        uVolt2Volt, picks=["eeg", "eog", "ecg", "misc"], channel_wise=True
+        lambda x: x * 1e-6, picks=["eeg", "eog", "ecg", "misc"], channel_wise=False
     )
-
     # annotations
     raw = add_annotations_from_events(raw)
-
     if instrument_stream is not None:
         onsets = list()
         durations = list()
@@ -81,21 +70,22 @@ def read_raw_xdf(fname):
         for ts, name in zip(
             instrument_stream["time_stamps"],
             instrument_stream["time_series"],
+            strict=True,
         ):
             idx = np.searchsorted(eeg_stream["time_stamps"], ts)
             onsets.append(raw.times[idx])
             durations.append(5)  # fix duration for now
             names.append(name[0])
-        annotations = mne.Annotations(onsets, durations, names)
+        annotations = Annotations(onsets, durations, names)
         raw.set_annotations(raw.annotations + annotations)
 
     return raw
 
 
 def find_streams(
-    streams: List[dict],
+    streams: list[dict],
     stream_name: str,
-) -> List[Tuple[int, dict]]:
+) -> list[tuple[int, dict]]:
     """Find the stream including 'stream_name' in the name attribute.
 
     Parameters

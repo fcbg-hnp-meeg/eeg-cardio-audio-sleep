@@ -1,27 +1,38 @@
-from bsl.lsl import StreamInfo, StreamOutlet
-from bsl.triggers import LSLTrigger
+from __future__ import annotations  # c.f. PEP 563, PEP 649
 
-from .._typing import EYELink
-from ..utils._checks import _check_type
+from typing import TYPE_CHECKING
+
+from byte_triggers import LSLTrigger
+from mne_lsl.lsl import StreamInfo, StreamOutlet
+
+from ..eye_link import BaseEyelink
+from ..utils._checks import check_type
 from ..utils._docs import fill_doc
+
+if TYPE_CHECKING:
+    from byte_triggers._base import BaseTrigger
+
+    from ..eye_link import BaseEyelink
 
 
 @fill_doc
 class Trigger:
-    """Trigger class combining a BSL trigger and an eye-link system.
+    """Trigger class combining an hardware trigger and an eye-link system.
 
     Parameters
     ----------
     trigger : Trigger
-        A BSL trigger instance.
+        A trigger instance.
     %(eye_link)s
     """
 
-    def __init__(self, trigger, eye_link: EYELink, instruments: bool = True):
+    def __init__(
+        self, trigger: BaseTrigger, eye_link: BaseEyelink, instruments: bool = True
+    ):
         if isinstance(trigger, LSLTrigger):
             raise RuntimeError(
-                "The BSL trigger can not be an LSL trigger as "
-                "it is incompatible with multiprocessing."
+                "The trigger can not be an LSL trigger as it is incompatible with "
+                "multiprocessing."
             )
         self._trigger = trigger
         self._eye_link = eye_link
@@ -69,7 +80,7 @@ class TriggerInstrument:
         value : str
             Value sent on the LSL outlet.
         """
-        _check_type(value, (str,), "value")
+        check_type(value, (str,), "value")
         self._outlet.push_sample([value])
 
     def close(self) -> None:

@@ -1,8 +1,14 @@
-import mne
-import numpy as np
-from mne.io import BaseRaw
+from __future__ import annotations  # c.f. PEP 563, PEP 649
 
-from ..config import load_triggerbox_triggers, load_triggers
+from typing import TYPE_CHECKING
+
+import numpy as np
+from mne import Annotations, find_events
+
+from ..config.constants import TRIGGER_HWD, TRIGGERS
+
+if TYPE_CHECKING:
+    from mne.io import BaseRaw
 
 
 def map_aux(
@@ -76,16 +82,16 @@ def add_annotations_from_events(raw: BaseRaw) -> BaseRaw:
     -------
     raw : Raw
     """
-    events = mne.find_events(raw, stim_channel="TRIGGER")
-    tdef = load_triggers()
-    tdef_hardware = load_triggerbox_triggers()
+    events = find_events(raw, stim_channel="TRIGGER")
+    tdef = TRIGGERS
+    tdef_hardware = TRIGGER_HWD
 
     # Block start/stop
     blocks = {
-        "Synchronous": (tdef.sync_start, tdef.sync_stop),
-        "Isochronous": (tdef.iso_start, tdef.iso_stop),
-        "Asynchronous": (tdef.async_start, tdef.async_stop),
-        "Baseline": (tdef.baseline_start, tdef.baseline_stop),
+        "Synchronous": (tdef["sync_start"], tdef["sync_stop"]),
+        "Isochronous": (tdef["iso_start"], tdef["iso_stop"]),
+        "Asynchronous": (tdef["async_start"], tdef["async_stop"]),
+        "Baseline": (tdef["baseline_start"], tdef["baseline_stop"]),
     }
     for block, (tdef_start, tdef_stop) in blocks.items():
         starts = np.sort(np.where(events[:, 2] == tdef_start)[0])
@@ -95,53 +101,53 @@ def add_annotations_from_events(raw: BaseRaw) -> BaseRaw:
         onsets = [events[start, 0] / raw.info["sfreq"] for start in starts]
         durations = [
             (events[stop, 0] - events[start, 0]) / raw.info["sfreq"]
-            for start, stop in zip(starts, stops)
+            for start, stop in zip(starts, stops, strict=True)
         ]
-        annotations = mne.Annotations(onsets, durations, block)
+        annotations = Annotations(onsets, durations, block)
         raw.set_annotations(raw.annotations + annotations)
 
     # Pause/Resume
-    pause = np.sort(np.where(events[:, 2] == tdef.pause)[0])
-    resume = np.sort(np.where(events[:, 2] == tdef.resume)[0])
+    pause = np.sort(np.where(events[:, 2] == tdef["pause"])[0])
+    resume = np.sort(np.where(events[:, 2] == tdef["resume"])[0])
     if pause.shape == resume.shape:  # TODO: Consider mismatch
         onsets = [events[start, 0] / raw.info["sfreq"] for start in pause]
         durations = [
             (events[stop, 0] - events[start, 0]) / raw.info["sfreq"]
-            for start, stop in zip(pause, resume)
+            for start, stop in zip(pause, resume, strict=True)
         ]
-        annotations = mne.Annotations(onsets, durations, "BAD_Pause")
+        annotations = Annotations(onsets, durations, "BAD_Pause")
         raw.set_annotations(raw.annotations + annotations)
 
     # Sounds/Omissions
     duration = 0.1
-    for name, event in (("Sound", tdef.sound), ("Omission", tdef.omission)):
+    for name, event in (("Sound", tdef["sound"]), ("Omission", tdef["omission"])):
         stim = np.where(events[:, 2] == event)[0]
         onsets = [events[start, 0] / raw.info["sfreq"] for start in stim]
-        annotations = mne.Annotations(onsets, duration, name)
+        annotations = Annotations(onsets, duration, name)
         raw.set_annotations(raw.annotations + annotations)
 
     # Instrument sounds
     duration = 0.4
     for name, event in (
-        ("Percussion", tdef.percussion),
-        ("String", tdef.string),
-        ("Wind", tdef.wind),
+        ("Percussion", tdef["percussion"]),
+        ("String", tdef["string"]),
+        ("Wind", tdef["wind"]),
     ):
         stim = np.where(events[:, 2] == event)[0]
         onsets = [events[start, 0] / raw.info["sfreq"] for start in stim]
-        annotations = mne.Annotations(onsets, duration, name)
+        annotations = Annotations(onsets, duration, name)
         raw.set_annotations(raw.annotations + annotations)
 
     # Instrument responses
     duration = 0.1
     for name, event in (
-        ("R_Percussion", tdef_hardware.percussion),
-        ("R_String", tdef_hardware.string),
-        ("R_Wind", tdef_hardware.wind),
+        ("R_Percussion", tdef_hardware["percussion"]),
+        ("R_String", tdef_hardware["string"]),
+        ("R_Wind", tdef_hardware["wind"]),
     ):
         stim = np.where(events[:, 2] == event)[0]
         onsets = [events[start, 0] / raw.info["sfreq"] for start in stim]
-        annotations = mne.Annotations(onsets, duration, name)
+        annotations = Annotations(onsets, duration, name)
         raw.set_annotations(raw.annotations + annotations)
 
     return raw

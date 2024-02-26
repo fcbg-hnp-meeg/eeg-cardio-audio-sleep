@@ -1,18 +1,21 @@
+from __future__ import annotations  # c.f. PEP 563, PEP 649
+
 import multiprocessing as mp
 from pathlib import Path
-from typing import Dict
+from typing import TYPE_CHECKING
 
 import numpy as np
 from psychopy.clock import wait
 from psychopy.hardware.keyboard import Keyboard
-from psychopy.visual import ImageStim, TextStim, Window
+from psychopy.visual import ImageStim, TextStim
 
 from .utils import load_instrument_categories, load_instrument_images
 
+if TYPE_CHECKING:
+    from psychopy.visual import Window
 
-def example(
-    win: Window, instrument_sounds: Dict[str, Path], volume: float
-) -> None:  # noqa: D401
+
+def example(win: Window, instrument_sounds: dict[str, Path], volume: float) -> None:  # noqa: D401
     """Example task."""
     try:
         # prepare keyboard for interaction
@@ -32,7 +35,7 @@ def example(
         # determine positions
         positions = np.linspace(-0.5, 0.5, len(instruments))
         images = list()
-        for instrument, position in zip(instruments, positions):
+        for instrument, position in zip(instruments, positions, strict=True):
             images.append(
                 ImageStim(win, instrument_images[instrument], pos=(position, 0))
             )
@@ -57,11 +60,17 @@ def example(
     except Exception:
         raise
     finally:
-        win.flip()  # flush win.callOnFlip() and win.timeOnFlip()
-        win.close()
+        try:
+            win.flip()  # flush win.callOnFlip() and win.timeOnFlip()
+        except Exception:
+            pass
+        try:
+            win.close()
+        except Exception:
+            pass
 
 
-def play_sounds(instrument_sounds: Dict[str, Path], volume: float) -> None:
+def play_sounds(instrument_sounds: dict[str, Path], volume: float) -> None:
     """Play example sounds."""
     from stimuli.audio import Sound
 
